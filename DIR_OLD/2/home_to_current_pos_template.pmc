@@ -1,0 +1,52 @@
+; Homing PLC for Axis 2 (PLC 9)
+; 
+; This program will home an axis to the current position. It issues a HMZ
+; command.
+
+; Initial configuration of state variables.
+; Homing State P Variable
+P900 = 0
+
+; Homing Status P Variable
+P901 = 0
+
+DEL GAT
+OPEN PLC9 CLEAR
+P901 = 1
+
+;---- Configuring State ----
+P900=1
+  
+if (P901=1)
+
+	;---- Homing State ----
+	if (P901=1)
+		P900=4
+		; Execute the move commands
+		cmd "#2hmz"
+	endif
+
+	;---- Check if all motors have homed ----
+	if (P901=1)
+	and (M245=0)
+		P901=6
+	endif
+endif
+
+;---- Done ----
+if (P901 = 1)
+	;If we've got this far without failing, set status and state done
+	P901=0
+	P900=7
+endif
+
+;---- Tidy Up ----
+;Stop all motors if they don't have a following error
+if (M242=0)
+	cmd "#2J/"
+endif
+
+DISABLE PLC9
+CLOSE
+
+

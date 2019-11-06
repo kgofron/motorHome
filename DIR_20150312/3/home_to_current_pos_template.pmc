@@ -1,0 +1,58 @@
+; Homing PLC for Axis 3 (PLC 10)
+; 
+; This program will home an axis to the current position. It issues a HMZ
+; command.
+; 
+; Wayne Lewis 20140108
+; 
+; Macros:
+; - PLC: PLC number
+; - AXIS: motion axis
+
+; Initial configuration of state variables.
+; Homing State P Variable
+P1000 = 0
+
+; Homing Status P Variable
+P1001 = 0
+
+DEL GAT
+OPEN PLC10 CLEAR
+P1001 = 1
+
+;---- Configuring State ----
+P1000=1
+  
+if (P1001=1)
+
+	;---- Homing State ----
+	if (P1001=1)
+		P1000=4
+		; Execute the move commands
+		cmd "#3hmz"
+	endif
+
+	;---- Check if all motors have homed ----
+	if (P1001=1)
+	and (M345=0)
+		P1001=6
+	endif
+endif
+
+;---- Done ----
+if (P1001 = 1)
+	;If we've got this far without failing, set status and state done
+	P1001=0
+	P1000=7
+endif
+
+;---- Tidy Up ----
+;Stop all motors if they don't have a following error
+if (M342=0)
+	cmd "#3J/"
+endif
+
+DISABLE PLC10
+CLOSE
+
+

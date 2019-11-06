@@ -1,0 +1,52 @@
+; Homing PLC for Axis 7 (PLC 14)
+; 
+; This program will home an axis to the current position. It issues a HMZ
+; command.
+
+; Initial configuration of state variables.
+; Homing State P Variable
+P1400 = 0
+
+; Homing Status P Variable
+P1401 = 0
+
+DEL GAT
+OPEN PLC14 CLEAR
+P1401 = 1
+
+;---- Configuring State ----
+P1400=1
+  
+if (P1401=1)
+
+	;---- Homing State ----
+	if (P1401=1)
+		P1400=4
+		; Execute the move commands
+		cmd "#7hmz"
+	endif
+
+	;---- Check if all motors have homed ----
+	if (P1401=1)
+	and (M745=0)
+		P1401=6
+	endif
+endif
+
+;---- Done ----
+if (P1401 = 1)
+	;If we've got this far without failing, set status and state done
+	P1401=0
+	P1400=7
+endif
+
+;---- Tidy Up ----
+;Stop all motors if they don't have a following error
+if (M742=0)
+	cmd "#7J/"
+endif
+
+DISABLE PLC14
+CLOSE
+
+

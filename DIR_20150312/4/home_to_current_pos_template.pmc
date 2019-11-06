@@ -1,0 +1,58 @@
+; Homing PLC for Axis 4 (PLC 11)
+; 
+; This program will home an axis to the current position. It issues a HMZ
+; command.
+; 
+; Wayne Lewis 20140108
+; 
+; Macros:
+; - PLC: PLC number
+; - AXIS: motion axis
+
+; Initial configuration of state variables.
+; Homing State P Variable
+P1100 = 0
+
+; Homing Status P Variable
+P1101 = 0
+
+DEL GAT
+OPEN PLC11 CLEAR
+P1101 = 1
+
+;---- Configuring State ----
+P1100=1
+  
+if (P1101=1)
+
+	;---- Homing State ----
+	if (P1101=1)
+		P1100=4
+		; Execute the move commands
+		cmd "#4hmz"
+	endif
+
+	;---- Check if all motors have homed ----
+	if (P1101=1)
+	and (M445=0)
+		P1101=6
+	endif
+endif
+
+;---- Done ----
+if (P1101 = 1)
+	;If we've got this far without failing, set status and state done
+	P1101=0
+	P1100=7
+endif
+
+;---- Tidy Up ----
+;Stop all motors if they don't have a following error
+if (M442=0)
+	cmd "#4J/"
+endif
+
+DISABLE PLC11
+CLOSE
+
+

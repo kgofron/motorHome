@@ -1,0 +1,175 @@
+; Homing PLC for Axis 6 (PLC 13)
+
+; This homing routine will move to a limit, and then search for the home switch.
+; The axis home velocity sign sets the direction for the final "home to
+; home switch" move. The initial move to the limit will be in the opposite direction.
+; 
+; Wayne Lewis 20140108
+; 
+; Macros:
+; - PLC: PLC number
+; - AXIS: motion axis
+; - TIMER: PMAC timer to use
+; - SERVO: first three digits of axis gate array (I7mn)
+
+; P variables
+; P1300 - homing state (homing, not homing)
+; P1301 - homing status (limit search, home search, post-home move)
+; P1302 - post-home move (0 = return to previous, 1 = stay at zero)
+; Homing State P Variable
+
+P1300 = 0
+
+; Homing Status P Variable
+P1301 = 0
+
+DEL GAT
+OPEN PLC13 CLEAR
+P1301 = 1
+
+;---- Configuring State ----
+P1300=1
+;Save high soft limits to P variable Pxx04
+P1304=I613
+;Save the low soft limits to P variable Pxx20
+P1320=I614
+;Save the home capture flags to P variable Pxx36
+P1336=I7122
+;Save the limit flags to P variable Pxx68
+P1368=I624
+;Save the current position to P variable Pxx84
+P1384=M662
+;Clear the soft limits
+I613=0
+I614=0
+
+if (P1301=1)
+	;---- FastSearch State ----
+  ; Move to the limit switch
+	if (P1301=1)
+		P1300=8
+		; Execute the move commands
+		M672=100000000*(-I623/ABS(I623))
+		cmd "#6J^*"
+		; Wait for the move to complete
+		I5712 = 20 * 8388608/I10 ; Small delay to start moving
+		while (I5712 > 0)
+		endw
+		I5712 = 600000 * 8388608/I10 ; Now start checking the conditions
+		while (M640=0) ; At least one motor should not be In Position
+		and (M642=0) ; No following errors should be set for any motor
+		and (I5712 > 0) ; Check for timeout
+		and (P1301 = 1) ; Check that we didn't abort
+		endw
+
+		; Check why we left the while loop
+		if (M642=1) ; If a motor hit a following error
+			P1301 = 4
+		endif
+		if (I5712<0 or I5712=0) ; If we timed out
+			P1301 = 3
+		endif
+	endif
+
+	;---- Store the difference between current pos and start pos ----
+	if (P1301=1)
+		P1386=(P1386-M662)/(I608*32)-(I626/16)
+	endif
+
+	;---- Homing State ----
+	if (P1301=1)
+		P1300=4
+    ; Set the capture flag to use the home flag.            
+    I7123=0
+    ; Set the polarity of the home switch. NO=2, NC=10.
+		I7122=$(HOME_POL)
+		; Execute the move commands
+		cmd "#6hm"
+		; Wait for the move to complete
+		I5712 = 20 * 8388608/I10 ; Small delay to start moving
+		while (I5712 > 0)
+		endw
+		I5712 = 600000 * 8388608/I10 ; Now start checking the conditions
+		while (M640=0) ; At least one motor should not be In Position
+		and (M642=0) ; No following errors should be set for any motor
+		and (M630=0) ; Should not stop on position limit for selected motors
+		and (I5712 > 0) ; Check for timeout
+		and (P1301 = 1) ; Check that we didn't abort
+		endw
+		; Check why we left the while loop
+		if (M642=1) ; If a motor hit a following error
+			P1301 = 4
+		endif
+		if (M630=1) ; If a motor hit a limit
+			P1301 = 5
+		endif
+		if (I5712<0 or I5712=0) ; If we timed out
+			P1301 = 3
+		endif
+	endif
+
+	;---- Check if all motors have homed ----
+	if (P1301=1)
+	and (M645=0)
+		P1301=6
+	endif
+
+	;---- PostHomeMove State ----
+	if (P1301=1)
+    ; Check the type of post-home move
+	  if (P1302=0)
+      P1300=5
+      ; Execute the move commands
+      M672=P1384/(I608*32)
+      cmd "#6J=*"
+      ; Wait for the move to complete
+      I5712 = 20 * 8388608/I10 ; Small delay to start moving
+      while (I5712 > 0)
+      endw
+      I5712 = 600000 * 8388608/I10 ; Now start checking the conditions
+      while (M640=0) ; At least one motor should not be In Position
+      and (M642=0) ; No following errors should be set for any motor
+      and (M630=0) ; Should not stop on position limit for selected motors
+      and (I5712 > 0) ; Check for timeout
+      and (P1301 = 1) ; Check that we didn't abort
+      endw
+      ; Check why we left the while loop
+      if (M642=1) ; If a motor hit a following error
+        P1301 = 4
+      endif
+      if (M630=1) ; If a motor hit a limit
+        P1301 = 5
+      endif
+      if (I5712<0 or I5712=0) ; If we timed out
+        P1301 = 3
+      endif
+    endif
+	endif
+
+endif
+
+;---- Done ----
+if (P1301 = 1)
+	;If we've got this far without failing, set status and state done
+	P1301=0
+	P1300=7
+endif
+
+;---- Tidy Up ----
+;Stop all motors if they don't have a following error
+if (M642=0)
+	cmd "#6J/"
+endif
+;Restore the high soft limits from P variables Pxx04..x19
+I613=P1304
+;Restore the low soft limits from P variables Pxx20..x35
+I614=P1320
+;Restore the home capture flags from P variables Pxx36..x51
+I7122=P1336
+;Restore the limit flags to P variables Pxx68..x83
+I624=P1368
+
+DISABLE PLC13
+CLOSE
+
+

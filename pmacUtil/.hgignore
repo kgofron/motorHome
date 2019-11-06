@@ -1,0 +1,18 @@
+syntax: glob 
+*.orig
+fls/*
+O.linux-x86*/
+dbd/
+db/
+lib/linux-x86*/
+O.Common/
+*.swp
+qt/
+*.edl~
+.project
+*.56K
+*.TAB
+*.PMA
+*.MAP
+*.LOG
+*.TBL

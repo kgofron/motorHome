@@ -1,0 +1,58 @@
+; Homing PLC for Axis 5 (PLC 12)
+; 
+; This program will home an axis to the current position. It issues a HMZ
+; command.
+; 
+; Wayne Lewis 20140108
+; 
+; Macros:
+; - PLC: PLC number
+; - AXIS: motion axis
+
+; Initial configuration of state variables.
+; Homing State P Variable
+P1200 = 0
+
+; Homing Status P Variable
+P1201 = 0
+
+DEL GAT
+OPEN PLC12 CLEAR
+P1201 = 1
+
+;---- Configuring State ----
+P1200=1
+  
+if (P1201=1)
+
+	;---- Homing State ----
+	if (P1201=1)
+		P1200=4
+		; Execute the move commands
+		cmd "#5hmz"
+	endif
+
+	;---- Check if all motors have homed ----
+	if (P1201=1)
+	and (M545=0)
+		P1201=6
+	endif
+endif
+
+;---- Done ----
+if (P1201 = 1)
+	;If we've got this far without failing, set status and state done
+	P1201=0
+	P1200=7
+endif
+
+;---- Tidy Up ----
+;Stop all motors if they don't have a following error
+if (M542=0)
+	cmd "#5J/"
+endif
+
+DISABLE PLC12
+CLOSE
+
+

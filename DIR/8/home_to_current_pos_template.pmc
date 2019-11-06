@@ -1,0 +1,52 @@
+; Homing PLC for Axis 8 (PLC 15)
+; 
+; This program will home an axis to the current position. It issues a HMZ
+; command.
+
+; Initial configuration of state variables.
+; Homing State P Variable
+P1500 = 0
+
+; Homing Status P Variable
+P1501 = 0
+
+DEL GAT
+OPEN PLC15 CLEAR
+P1501 = 1
+
+;---- Configuring State ----
+P1500=1
+  
+if (P1501=1)
+
+	;---- Homing State ----
+	if (P1501=1)
+		P1500=4
+		; Execute the move commands
+		cmd "#8hmz"
+	endif
+
+	;---- Check if all motors have homed ----
+	if (P1501=1)
+	and (M845=0)
+		P1501=6
+	endif
+endif
+
+;---- Done ----
+if (P1501 = 1)
+	;If we've got this far without failing, set status and state done
+	P1501=0
+	P1500=7
+endif
+
+;---- Tidy Up ----
+;Stop all motors if they don't have a following error
+if (M842=0)
+	cmd "#8J/"
+endif
+
+DISABLE PLC15
+CLOSE
+
+
